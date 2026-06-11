@@ -12,7 +12,7 @@ handle, instead of crashing the whole agent run.
 import ast
 import operator
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from langchain_core.tools import tool
@@ -70,11 +70,17 @@ def get_current_datetime(timezone: str = "UTC") -> str:
     """
     try:
         tz = ZoneInfo(timezone)
-    except Exception:  # noqa: BLE001
+    except ZoneInfoNotFoundError:
+        # The name was valid-looking but the tz database has no entry for it,
+        # OR the system tz database is missing entirely (install `tzdata`).
         return (
-            f"Unknown timezone '{timezone}'. Use an IANA name like "
-            "'Asia/Kuala_Lumpur' or 'America/New_York'."
+            f"Timezone '{timezone}' could not be loaded. If this happens for "
+            "every timezone (including 'UTC'), the IANA timezone database is "
+            "missing — run `pip install tzdata`."
         )
+    except Exception as exc:  # noqa: BLE001
+        return f"Invalid timezone '{timezone}': {exc}"
+
     return datetime.now(tz).strftime("%A, %d %B %Y, %H:%M:%S %Z")
 
 
