@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent · Gemini 2.5 Flash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #14161f;
+    --panel: #1c1f2b;
+    --panel-2: #232735;
+    --border: #2a2e3c;
+    --text: #e6e8ef;
+    --muted: #8a90a6;
+    --amber: #e8a33d;   /* brand / agent */
+    --cyan: #56c7d6;    /* tool call */
+    --green: #7bd88f;   /* tool result */
+    --user: #2f3446;    /* user bubble */
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; margin: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 12px var(--amber);
+  }
+
+  header h1 {
+    font-family: "Sora", sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+    margin-right: 12px;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 20px;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  .turn { margin-bottom: 28px; }
+
+  /* user message */
+  .user-msg {
+    background: var(--user);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 14px 14px 4px 14px;
+    max-width: 80%;
+    margin-left: auto;
+    width: fit-content;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  /* agent answer */
+  .agent-msg {
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    padding-left: 20px;
+    border-left: 2px solid var(--amber);
+  }
+  .agent-msg.streaming::after {
+    content: "▋";
+    color: var(--amber);
+    margin-left: 1px;
+    animation: blink 1s steps(2) infinite;
+  }
+
+  /* the signature: tool steps on a rail */
+  .steps {
+    margin: 4px 0 14px;
+    padding-left: 20px;
+    border-left: 2px solid var(--border);
+  }
+
+  .step {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    margin: 8px 0;
+    position: relative;
+    animation: rise 0.25s ease both;
+  }
+
+  .step::before {
+    content: "";
+    position: absolute;
+    left: -27px;
+    top: 5px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid currentColor;
+  }
+
+  .step.call { color: var(--cyan); }
+  .step.result { color: var(--green); }
+
+  .step .label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    opacity: 0.85;
+  }
+
+  .step .body {
+    color: var(--text);
+    margin-top: 3px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    max-height: 160px;
+    overflow: auto;
+  }
+
+  .thinking {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12.5px;
+    color: var(--muted);
+    padding-left: 20px;
+  }
+  .thinking span { animation: blink 1.2s infinite; }
+  .thinking span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+  .error {
+    color: #ff8080;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    padding-left: 20px;
+    border-left: 2px solid #ff8080;
+  }
+  .notice {
+    color: var(--amber);
+    font-size: 14px;
+    line-height: 1.5;
+    padding-left: 20px;
+    border-left: 2px solid var(--amber);
+  }
+
+  /* composer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+    flex-shrink: 0;
+  }
+  .composer {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 8px 8px 14px;
+  }
+  .composer:focus-within { border-color: var(--amber); }
+
+  textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    resize: none;
+    color: var(--text);
+    font-family: "Inter", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 6px 0;
+    max-height: 160px;
+    outline: none;
+  }
+  textarea::placeholder { color: var(--muted); }
+
+  button.send {
+    background: var(--amber);
+    color: #1a1205;
+    border: none;
+    border-radius: 10px;
+    width: 40px; height: 40px;
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    transition: opacity 0.15s;
+  }
+  button.send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .hint {
+    max-width: 760px;
+    margin: 8px auto 0;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* empty state */
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    margin-top: 12vh;
+  }
+  .empty h2 {
+    font-family: "Sora", sans-serif;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0 0 6px;
+  }
+  .chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+  .chip {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .chip:hover { border-color: var(--amber); }
+
+  /* source citations under an answer */
+  .sources {
+    margin: 10px 0 0;
+    padding-left: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .sources .lbl {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--cyan);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+  }
+
+  /* New chat button */
+  header .newchat {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-family: "Inter", sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  header .newchat:hover { border-color: var(--amber); color: var(--text); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+  <header>
+    <div class="dot"></div>
+    <h1>Agent</h1>
+    <div class="sub">gemini-2.5-flash · langchain</div>
+    <button class="newchat" id="newchat" title="Start a fresh conversation">New chat</button>
+  </header>
+
+  <main id="chat">
+    <div class="wrap" id="thread">
+      <div class="empty" id="empty">
+        <h2>Ask the agent anything</h2>
+        <div>It can do math, check the time, and look things up on Wikipedia.</div>
+        <div class="chips">
+          <div class="chip">What is 2847 * 19, and who was Ada Lovelace?</div>
+          <div class="chip">What time is it in Tokyo right now?</div>
+          <div class="chip">How many vacation days do I get at Northwind?</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Message the agent…"></textarea>
+      <button class="send" id="send" title="Send">↑</button>
+    </div>
+    <div class="hint">Enter to send · Shift+Enter for a new line</div>
+  </footer>
+
+<script>
+  const API = "/api/chat/stream";
+  // Persist the session id so the agent's memory (now stored server-side in
+  // SQLite) carries across page reloads and server restarts.
+  const SESSION_KEY = "agent_session_id";
+  let sessionId = localStorage.getItem(SESSION_KEY) || crypto.randomUUID();
+  localStorage.setItem(SESSION_KEY, sessionId);
+  let busy = false;
+
+  const thread = document.getElementById("thread");
+  let empty = document.getElementById("empty");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send");
+  const chat = document.getElementById("chat");
+  const newchatBtn = document.getElementById("newchat");
+
+  function scroll() { chat.scrollTop = chat.scrollHeight; }
+
+  // Start a fresh conversation thread (new server-side memory).
+  newchatBtn.addEventListener("click", () => {
+    if (busy) return;
+    sessionId = crypto.randomUUID();
+    localStorage.setItem(SESSION_KEY, sessionId);
+    thread.innerHTML = "";
+    location.reload();
+  });
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  }
+  input.addEventListener("input", autosize);
+
+  document.querySelectorAll(".chip").forEach(c =>
+    c.addEventListener("click", () => { input.value = c.textContent; autosize(); send(); })
+  );
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  sendBtn.addEventListener("click", send);
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  async function send() {
+    const message = input.value.trim();
+    if (!message || busy) return;
+    if (empty) empty.remove();
+
+    busy = true;
+    sendBtn.disabled = true;
+    input.value = "";
+    autosize();
+
+    // turn container
+    const turn = el("div", "turn");
+    turn.appendChild(Object.assign(el("div", "user-msg"), { textContent: message }));
+    const stepsBox = el("div", "steps");
+    stepsBox.style.display = "none";
+    turn.appendChild(stepsBox);
+    const thinking = el("div", "thinking");
+    thinking.innerHTML = "thinking<span>.</span><span>.</span><span>.</span>";
+    turn.appendChild(thinking);
+    thread.appendChild(turn);
+    scroll();
+
+    try {
+      const res = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, session_id: sessionId }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const ctx = { turn, stepsBox, thinking, answerEl: null, sources: [] };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by a blank line
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          handleEvent(raw, ctx);
+        }
+      }
+    } catch (err) {
+      thinking.remove();
+      const e = el("div", "error", "Connection error: " + err.message);
+      turn.appendChild(e);
+    } finally {
+      busy = false;
+      sendBtn.disabled = false;
+      input.focus();
+      scroll();
+    }
+  }
+
+  // Make sure there's an answer bubble to write into, and drop the spinner.
+  function ensureAnswer(ctx) {
+    if (ctx.thinking && ctx.thinking.parentNode) ctx.thinking.remove();
+    if (!ctx.answerEl) {
+      ctx.answerEl = el("div", "agent-msg streaming");
+      ctx.turn.appendChild(ctx.answerEl);
+    }
+    return ctx.answerEl;
+  }
+
+  // Render citation chips for documents the agent retrieved from.
+  function renderSources(ctx) {
+    if (!ctx.sources.length) return;
+    if (ctx.sourcesEl) ctx.sourcesEl.remove();
+    const row = el("div", "sources");
+    row.appendChild(el("span", "lbl", "Sources"));
+    ctx.sources.forEach(name => {
+      const chip = el("span", "source-chip");
+      chip.appendChild(el("span", null, "\u{1F4C4}")); // page icon
+      chip.appendChild(el("span", null, name));
+      row.appendChild(chip);
+    });
+    ctx.turn.appendChild(row);
+    ctx.sourcesEl = row;
+  }
+
+  function handleEvent(raw, ctx) {
+    let event = "message", dataLine = "";
+    for (const line of raw.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLine += line.slice(5).trim();
+    }
+    let data = {};
+    try { data = JSON.parse(dataLine || "{}"); } catch { return; }
+
+    const { turn, stepsBox, thinking } = ctx;
+
+    if (event === "tool_call") {
+      stepsBox.style.display = "";
+      const s = el("div", "step call");
+      s.appendChild(el("div", "label", "→ calling " + data.name));
+      s.appendChild(el("div", "body", JSON.stringify(data.args, null, 2)));
+      stepsBox.appendChild(s);
+      scroll();
+    } else if (event === "tool_result") {
+      stepsBox.style.display = "";
+      const s = el("div", "step result");
+      s.appendChild(el("div", "label", "← " + data.name + " returned"));
+      const body = (data.result || "").slice(0, 800);
+      s.appendChild(el("div", "body", body));
+      stepsBox.appendChild(s);
+      scroll();
+    } else if (event === "token") {
+      // Live answer: append each token as it arrives.
+      if (data.content) {
+        const bubble = ensureAnswer(ctx);
+        bubble.textContent += data.content;
+        scroll();
+      }
+    } else if (event === "sources") {
+      // Document citations for this turn; rendered once the answer is final.
+      ctx.sources = data.names || [];
+    } else if (event === "answer") {
+      // Authoritative final text — sets the bubble to the clean full answer.
+      if (data.content) {
+        ensureAnswer(ctx).textContent = data.content;
+      } else if (thinking && thinking.parentNode) {
+        thinking.remove();
+      }
+      if (ctx.answerEl) ctx.answerEl.classList.remove("streaming");
+      renderSources(ctx);
+      scroll();
+    } else if (event === "error") {
+      if (thinking && thinking.parentNode) thinking.remove();
+      if (data.kind === "notice") {
+        turn.appendChild(el("div", "notice", data.message));
+      } else {
+        turn.appendChild(el("div", "error", "Error: " + data.message));
+      }
+      scroll();
+    }
+  }
+
+  // Restore the persisted conversation (server-side SQLite memory) on load.
+  async function loadHistory() {
+    try {
+      const res = await fetch("/api/history/" + encodeURIComponent(sessionId));
+      if (!res.ok) return;
+      const data = await res.json();
+      const msgs = data.messages || [];
+      if (!msgs.length) return;
+      if (empty) { empty.remove(); empty = null; }
+      msgs.forEach(m => {
+        const turn = el("div", "turn");
+        if (m.role === "user") {
+          turn.appendChild(Object.assign(el("div", "user-msg"), { textContent: m.content }));
+        } else {
+          turn.appendChild(el("div", "agent-msg", m.content));
+        }
+        thread.appendChild(turn);
+      });
+      scroll();
+    } catch (_) { /* no history yet — leave the empty state */ }
+  }
+
+  loadHistory();
+  input.focus();
+</script>
+</body>
+</html>
